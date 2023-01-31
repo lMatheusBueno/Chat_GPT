@@ -1,0 +1,86 @@
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"log"
+	"net/http"
+
+	"github.com/bwmarrin/discordgo"
+	"github.com/expressjs/express"
+)
+
+var (
+	discord *discordgo.Session
+)
+
+func init() {
+	var err error
+	discord, err = discordgo.New("Bot " + "<MTA3MDA3NTM1NTQ1MDMzMTE3Ng.GOHcWA.Lqzl_N0Y63xT-WsMR7EMhSZnbZF7pKKl5vnXS4>")
+	if err != nil {
+		log.Fatalf("Error creating Discord session: %v", err)
+	}
+}
+
+func sendMessage(w http.ResponseWriter, r *http.Request) {
+	type message struct {
+		ChannelID string `json:"channel_id"`
+		Message   string `json:"message"`
+	}
+
+	var msg message
+	err := json.NewDecoder(r.Body).Decode(&msg)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprintf(w, "Error decoding JSON: %v", err)
+		return
+	}
+
+	_, err = discord.ChannelMessageSend(msg.ChannelID, msg.Message)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprintf(w, "Error sending message: %v", err)
+		return
+	}
+
+	fmt.Fprintln(w, "Message sent successfully.")
+}
+
+func listServers(w http.ResponseWriter, r *http.Request) {
+	servers, err := discord.UserGuilds()
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprintf(w, "Error getting servers: %v", err)
+		return
+	}
+
+	type server struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	}
+
+	var serversData []server
+	for _, s := range servers {
+		serversData = append(serversData, server{ID: s.ID, Name: s.Name})
+	}
+
+	json.NewEncoder(w).Encode(serversData)
+}
+
+func listChannels(w http.ResponseWriter, r *http.Request) {
+	serverID := r.URL.Query().Get("server_id")
+	if serverID == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprintln(w, "Error: server_id query parameter is required.")
+		return
+	}
+
+	channels, err := discord.GuildChannels(serverID)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprintf(w, "Error getting channels: %v", err)
+		return
+	}
+
+	type channel struct {
+		ID   string `json
